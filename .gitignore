@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+backend/bug_reports.db
+kb/chroma_store/
+kb/data/*.csv
+kb/data/*.npy
+kb/data/*.lst
+kb/data/*.txt
+kb/data/*.jsonl
