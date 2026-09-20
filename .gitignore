@@ -1,10 +1,23 @@
+# Python
 .venv/
 __pycache__/
 *.pyc
+
+# Environment variables
+.env
+.env.*
+
+# Backend generated files
 backend/bug_reports.db
+
+# Knowledge base generated files
 kb/chroma_store/
 kb/data/*.csv
 kb/data/*.npy
 kb/data/*.lst
 kb/data/*.txt
 kb/data/*.jsonl
+
+# Frontend
+frontend/node_modules/
+frontend/dist/

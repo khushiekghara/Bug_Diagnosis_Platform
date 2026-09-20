@@ -1,80 +1,13 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8" />
-<title>Bug Submission Module</title>
-<style>
-  body { font-family: Arial, sans-serif; max-width: 700px; margin: 40px auto; padding: 0 16px; }
-  h1 { font-size: 1.4rem; }
-  fieldset { margin-bottom: 24px; padding: 16px; }
-  textarea, input[type=text] { width: 100%; box-sizing: border-box; padding: 8px; margin-top: 4px; }
-  textarea { min-height: 100px; }
-  button { padding: 8px 16px; margin-top: 8px; cursor: pointer; }
-  #status { margin-top: 12px; font-weight: bold; }
-</style>
-</head>
-<body>
-  <h1>Submit a Bug Report</h1>
-
-  <fieldset>
-    <legend>Option A — Paste directly</legend>
-    <label>Title<input type="text" id="paste-title" /></label>
-    <label>Description<textarea id="paste-description"></textarea></label>
-    <label>Stack Trace<textarea id="paste-stacktrace"></textarea></label>
-    <label>Error Log<textarea id="paste-errorlog"></textarea></label>
-    <button onclick="submitPaste()">Submit Pasted Report</button>
-  </fieldset>
-
-  <fieldset>
-    <legend>Option B — Upload a file (.txt, .log, .json, .csv)</legend>
-    <label>Title<input type="text" id="upload-title" /></label>
-    <input type="file" id="upload-file" accept=".txt,.log,.json,.csv" />
-    <br />
-    <button onclick="submitFile()">Upload Bug File</button>
-  </fieldset>
-
-  <div id="status"></div>
-
-<script>
-const API_BASE = "http://localhost:8000";
-
-async function submitPaste() {
-  const body = {
-    title: document.getElementById("paste-title").value,
-    description: document.getElementById("paste-description").value || null,
-    stack_trace: document.getElementById("paste-stacktrace").value || null,
-    error_log: document.getElementById("paste-errorlog").value || null,
-  };
-  const res = await fetch(`${API_BASE}/bugs/paste`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  showStatus(res);
-}
-
-async function submitFile() {
-  const fileInput = document.getElementById("upload-file");
-  if (!fileInput.files.length) { alert("Choose a file first"); return; }
-  const formData = new FormData();
-  formData.append("title", document.getElementById("upload-title").value);
-  formData.append("file", fileInput.files[0]);
-
-  const res = await fetch(`${API_BASE}/bugs/upload`, {
-    method: "POST",
-    body: formData,
-  });
-  showStatus(res);
-}
-
-async function showStatus(res) {
-  const data = await res.json();
-  const el = document.getElementById("status");
-  el.style.color = res.ok ? "green" : "red";
-  el.textContent = res.ok
-    ? `Submitted successfully. Bug ID: ${data.id}`
-    : `Error: ${data.detail}`;
-}
-</script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#202124" />
+    <title>BugDiag — Bug Diagnosis Platform</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>
