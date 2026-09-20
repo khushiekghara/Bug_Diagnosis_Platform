@@ -59,8 +59,18 @@ bug-diagnosis-platform/
     models.py                   Bug report and diagnosis result schema
     schemas.py                  API request/response validation
     main.py                     FastAPI app and endpoints
-  frontend/
-    index.html                  Bug submission form
+  frontend/                     React (Vite) frontend
+    src/
+      components/               Layout, Sidebar, Topbar, BugTable, StatCard, StatusBadge
+      context/                  ThemeContext.jsx
+      pages/                    Dashboard, BugReports, BugDetails, Diagnosis, SubmitBug
+      services/                 api.js - calls to the backend API
+      utils/                    helpers.js
+      App.jsx, main.jsx, index.css
+    index.html
+    package.json
+    vite.config.js
+    .env.example
   kb/                            Historical Defect Knowledge Base pipeline
     data/                        Datasets (not committed to git, see below)
     chroma_store/                 Vector database (not committed to git)
@@ -107,9 +117,6 @@ uvicorn main:app --reload
 The API is available at `http://localhost:8000`, with interactive docs at
 `http://localhost:8000/docs`.
  
-Open `frontend/index.html` in a browser to use the submission form. When a
-bug is submitted, the Triage Agent and Log Analysis Agent run automatically.
- 
 Key endpoints:
 - `POST /bugs/paste` - submit a bug report by pasting text
 - `POST /bugs/upload` - submit a bug report by file upload
@@ -117,7 +124,24 @@ Key endpoints:
 - `GET /bugs/{id}` - get one bug report
 - `GET /bugs/{id}/diagnosis` - get the stored agent diagnosis for a bug
 - `POST /bugs/{id}/diagnose` - re-run the agent pipeline and return the full result
-### 3. Build the Historical Defect Knowledge Base
+### 3. Run the frontend
+ 
+The frontend is a React app built with Vite, with pages for a dashboard,
+bug reports list, bug details, diagnosis view, and a bug submission form.
+ 
+```
+cd frontend
+npm install
+npm run dev
+```
+ 
+This starts a local dev server (Vite prints the URL, typically
+`http://localhost:5173`). The frontend calls the backend API through
+`src/services/api.js` - make sure the backend (step 2 above) is running
+first, and that the API base URL in `api.js` (or `.env`, if used) points to
+`http://localhost:8000`.
+ 
+### 4. Build the Historical Defect Knowledge Base
  
 Place your dataset CSV (e.g. `fix.csv`) inside `kb/data/`, then run each
 step in order:
@@ -130,7 +154,7 @@ python embeddings.py
 python build_vector_store.py
 ```
  
-### 4. Test semantic retrieval
+### 5. Test semantic retrieval
  
 ```
 cd ..
@@ -140,7 +164,7 @@ python scripts/query_kb.py
 This runs a sample query against the vector store and prints the top
 matching historical bugs, confirming the RAG pipeline works end to end.
  
-### 5. Validate the Triage and Log Analysis Agents
+### 6. Validate the Triage and Log Analysis Agents
  
 ```
 python scripts/validate_agents.py
@@ -153,7 +177,7 @@ and a coverage report on a sample of the real seeded dataset.
  
 - Backend / API: FastAPI (Python)
 - Database: SQLite (development), PostgreSQL planned
-- Frontend: HTML/JavaScript (Milestone 1), React planned
+- Frontend: React (Vite)
 - Agent Layer: rule-based Triage Agent and Log Analysis Agent (Python,
   keyword matching and regex), Agent Orchestrator
 - Chunking: LangChain text splitters
@@ -162,15 +186,16 @@ and a coverage report on a sample of the real seeded dataset.
 - Historical Dataset: Mozilla Bugzilla bug reports (Kaggle DeepTriage dataset)
 Full details are in `docs/architecture.md`.
  
-## Planned for Milestone 3
- 
-- Root Cause Agent, Duplicate Detection Agent, and Remediation Agent
-- LLM-based reasoning over retrieved historical context
-- Results and recommendations interface
-- Expanding the historical dataset to include Apache and Eclipse sources
 ## Author
  
 Khushi
 Infosys Springboard Internship, Batch 3 (26-27)
 
  
+
+
+
+
+
+
+
