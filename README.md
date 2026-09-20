@@ -1,7 +1,9 @@
 Intelligent Bug Diagnosis Platform with Fix Recommendation Assistance
+
 Infosys Springboard Internship Project (Batch 3, 26-27) Milestone 1: Foundation & Bug Understanding
 
 Overview
+
 This project builds an AI-assisted platform that helps developers diagnose software bugs faster by combining a bug submission system with a Retrieval-Augmented Generation (RAG) pipeline over a historical defect knowledge base. Given a new bug report, the system retrieves semantically similar historical bugs and their resolutions to assist diagnosis and fix recommendation.
 
 See docs/architecture.md for the full system architecture, agent responsibilities, data model, and tech stack.
@@ -20,6 +22,7 @@ bug-diagnosis-platform/
   scripts/            Standalone test/utility scripts
   docs/               Architecture and design documentation
 Dataset
+
 The historical defect knowledge base is seeded using the DeepTriage bug report dataset (Mozilla Bugzilla bug reports), sourced from Kaggle. Apache and Eclipse sources are planned additions for a later milestone. See docs/architecture.md section 8 for known limitations.
 
 Because the raw dataset files and generated embeddings are large, they are excluded from this repository via .gitignore. To reproduce the knowledge base locally, download the dataset and place the files inside kb/data/, then follow the setup steps below.
@@ -32,11 +35,13 @@ pip install -r requirements.txt
 2. Run the Bug Submission Module (backend)
 cd backend
 uvicorn main:app --reload
+
 The API will be available at http://localhost:8000, with interactive docs at http://localhost:8000/docs.
 
 Open frontend/index.html in a browser to use the submission form.
 
 3. Build the Historical Defect Knowledge Base
+
 Place your dataset CSV (e.g. fix.csv) inside kb/data/, then run each step in order:
 
 cd kb
@@ -47,6 +52,7 @@ python build_vector_store.py
 4. Test semantic retrieval
 cd ..
 python scripts/query_kb.py
+
 This runs a sample query against the vector store and prints the top matching historical bugs, confirming the RAG pipeline works end to end.
 
 Tech Stack
@@ -57,7 +63,9 @@ Chunking: LangChain text splitters
 Embeddings: sentence-transformers (all-MiniLM-L6-v2)
 Vector Store: ChromaDB
 Historical Dataset: Mozilla Bugzilla bug reports (Kaggle DeepTriage dataset)
+
 Full details are in docs/architecture.md.
 
 Author
+
 Khushi Infosys Springboard Internship, Batch 3 (26-27)
