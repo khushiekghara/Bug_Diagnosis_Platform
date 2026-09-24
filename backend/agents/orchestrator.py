@@ -1,46 +1,54 @@
 """
 Milestone 2 -- Task 3: Multi-Agent Orchestration
-Runs the Triage Agent and Log Analysis Agent on a submitted bug report,
-collects their outputs, and assembles a single shared context object that
-downstream agents (Root Cause, Duplicate Detection, Remediation) will
-consume in a later milestone.
+Milestone 3 -- adds Root Cause Agent, Duplicate Detection Agent, and
+Remediation Agent as Stage 2 agents, running after Triage and Log
+Analysis (Stage 1).
+
+Runs the full agent pipeline on a submitted bug report, collects every
+agent's output, and assembles a single shared context object.
 
 Design notes:
-- Agents are registered in a list, so adding a new agent later is a
-  one-line change rather than a rewrite.
+- Agents are registered in ordered lists, so adding a new agent later is
+  a one-line change rather than a rewrite.
 - Each agent is run defensively: if one agent raises, the orchestrator
   records the error and continues instead of failing the whole pipeline.
-- The output is a structured "diagnosis context" -- a single dict holding
-  the original report, every agent's findings, and a combined summary.
+- Stage 2 agents run in a specific order and each one's output is added
+  back into shared_context before the next Stage 2 agent runs -- this is
+  required because RemediationAgent consumes RootCauseAgent's and
+  DuplicateDetectionAgent's output, so those two must run first.
 """
 from datetime import datetime, timezone
 from typing import Dict, List
 
 from agents.triage_agent import TriageAgent
 from agents.log_analysis_agent import LogAnalysisAgent
+from agents.root_cause_agent import RootCauseAgent
+from agents.duplicate_detection_agent import DuplicateDetectionAgent
+from agents.remediation_agent import RemediationAgent
+
+STAGE2_CONTEXT_KEYS = {
+    "RootCauseAgent": "root_cause",
+    "DuplicateDetectionAgent": "duplicate_detection",
+    "RemediationAgent": "remediation",
+}
 
 
 class AgentOrchestrator:
-    """
-    Coordinates the agent pipeline for a single bug report.
-    """
-
     def __init__(self):
-        # Stage 1 agents: these run first and produce context for later stages.
         self.stage1_agents = [
             TriageAgent(),
             LogAnalysisAgent(),
         ]
-        # Stage 2 agents (Root Cause, Duplicate Detection, Remediation)
-        # will be added here in Milestone 3.
-        self.stage2_agents: List = []
+        self.stage2_agents = [
+            RootCauseAgent(),
+            DuplicateDetectionAgent(),
+            RemediationAgent(),
+        ]
 
-    def _run_agent_safely(self, agent, bug_report: Dict) -> Dict:
-        """Runs one agent; on failure returns a structured error instead of
-        crashing the whole pipeline."""
+    def _run_agent_safely(self, agent, context) -> Dict:
         agent_name = agent.__class__.__name__
         try:
-            return agent.run(bug_report)
+            return agent.run(context)
         except Exception as exc:
             return {
                 "agent": agent_name,
@@ -49,9 +57,11 @@ class AgentOrchestrator:
             }
 
     def build_summary(self, agent_outputs: Dict) -> str:
-        """Human-readable one-paragraph summary combining both agents."""
         triage = agent_outputs.get("TriageAgent", {})
         log = agent_outputs.get("LogAnalysisAgent", {})
+        root_cause = agent_outputs.get("RootCauseAgent", {})
+        duplicates = agent_outputs.get("DuplicateDetectionAgent", {})
+        remediation = agent_outputs.get("RemediationAgent", {})
 
         parts = []
 
@@ -68,32 +78,32 @@ class AgentOrchestrator:
                 f"Log analysis identified a {log['exception_type']} "
                 f"originating at {log['failure_point']}."
             )
-            if log.get("affected_code_path"):
-                parts.append(
-                    f"Affected files: {', '.join(log['affected_code_path'][:3])}."
-                )
         elif log:
             parts.append("Log analysis found no parseable exception or stack trace.")
+
+        if root_cause and root_cause.get("root_cause_hypothesis"):
+            parts.append(f"Root cause hypothesis: {root_cause['root_cause_hypothesis']}")
+
+        if duplicates and duplicates.get("duplicate_status"):
+            match_count = len(duplicates.get("matches", []))
+            parts.append(
+                f"Duplicate check: {duplicates['duplicate_status']} "
+                f"({match_count} similar historical bug(s) found)."
+            )
+
+        if remediation and remediation.get("recommendations"):
+            top_rec = remediation["recommendations"][0]
+            parts.append(f"Top recommendation ({top_rec['basis']}): {top_rec['recommendation']}")
 
         return " ".join(parts) if parts else "No agent findings available."
 
     def run(self, bug_report: Dict) -> Dict:
-        """
-        bug_report: dict with keys 'id', 'title', 'description',
-        'stack_trace', 'error_log' (any text field may be empty).
-
-        Returns the full diagnosis context.
-        """
         agent_outputs = {}
 
-        # --- Stage 1: run Triage and Log Analysis ---
         for agent in self.stage1_agents:
             result = self._run_agent_safely(agent, bug_report)
             agent_outputs[agent.__class__.__name__] = result
 
-        # --- Build the shared context object ---
-        # This is what downstream agents will receive in Milestone 3:
-        # the original report PLUS everything stage 1 learned about it.
         shared_context = {
             "bug_report": {
                 "id": bug_report.get("id"),
@@ -106,10 +116,14 @@ class AgentOrchestrator:
             "log_analysis": agent_outputs.get("LogAnalysisAgent", {}),
         }
 
-        # --- Stage 2: downstream agents (empty for now, wired for M3) ---
         for agent in self.stage2_agents:
+            agent_name = agent.__class__.__name__
             result = self._run_agent_safely(agent, shared_context)
-            agent_outputs[agent.__class__.__name__] = result
+            agent_outputs[agent_name] = result
+
+            context_key = STAGE2_CONTEXT_KEYS.get(agent_name)
+            if context_key:
+                shared_context[context_key] = result
 
         return {
             "bug_id": bug_report.get("id"),
@@ -126,18 +140,15 @@ if __name__ == "__main__":
     import sys
     import os
 
-    # Allow running this file directly from the backend/ folder
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
     sample_bug = {
         "id": 1,
-        "title": "Application crashes on login with null pointer",
-        "description": "The app crashes whenever a user tries to log in after a password reset.",
+        "title": "Application crashes on tab close with video playing",
+        "description": "The browser crashes intermittently when closing a tab while a video plays in the background.",
         "stack_trace": (
-            'Traceback (most recent call last):\n'
-            '  File "app/auth.py", line 88, in login\n'
-            '    user.session.refresh()\n'
-            'AttributeError: NoneType object has no attribute refresh'
+            'nsIFrame::Destroy() at layout/base/nsFrame.cpp:512\n'
+            '  called from nsCSSFrameConstructor::ContentRemoved'
         ),
         "error_log": "",
     }

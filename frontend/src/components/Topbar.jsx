@@ -25,14 +25,8 @@ export default function Topbar({ onMenuClick, apiOnline }) {
 
         <div className="flex items-center gap-2">
           <div className="hidden items-center gap-2 rounded-full border border-[var(--border)] px-3 py-1.5 text-xs sm:flex">
-            <span
-              className={`h-2 w-2 rounded-full ${
-                apiOnline ? "bg-emerald-500" : "bg-red-500"
-              }`}
-            />
-            <span className="text-[var(--muted)]">
-              {apiOnline ? "Backend online" : "Backend offline"}
-            </span>
+            
+            
           </div>
 
           <button

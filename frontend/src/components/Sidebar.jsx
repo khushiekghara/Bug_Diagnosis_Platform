@@ -67,10 +67,9 @@ export default function Sidebar({ open, onClose }) {
         <div className="mt-auto p-4">
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
             <div className="mb-1 flex items-center gap-2 text-xs font-medium">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              FastAPI Backend
+              
             </div>
-            <p className="text-[11px] text-[var(--muted)]">localhost:8000</p>
+            
           </div>
         </div>
       </div>

@@ -9,10 +9,9 @@ import schemas
 from database import engine, get_db
 from agents.orchestrator import AgentOrchestrator
 
-# Create tables on startup
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Bug Diagnosis Platform — Submission + Agent Pipeline")
+app = FastAPI(title="Bug Diagnosis Platform -- Submission + Agent Pipeline")
 
 app.add_middleware(
     CORSMiddleware,
@@ -38,29 +37,49 @@ def _bug_to_dict(bug: models.BugReport) -> dict:
 
 
 def _run_and_store_diagnosis(bug: models.BugReport, db: Session) -> dict:
-    """Runs the agent pipeline on a bug and persists the result."""
+    """Runs the full agent pipeline (Milestone 2 + Milestone 3) on a bug
+    and persists every agent's result."""
     result = orchestrator.run(_bug_to_dict(bug))
+    outputs = result["agent_outputs"]
 
-    triage = result["agent_outputs"].get("TriageAgent", {})
-    log = result["agent_outputs"].get("LogAnalysisAgent", {})
+    triage = outputs.get("TriageAgent", {})
+    log = outputs.get("LogAnalysisAgent", {})
+    root_cause = outputs.get("RootCauseAgent", {})
+    duplicates = outputs.get("DuplicateDetectionAgent", {})
+    remediation = outputs.get("RemediationAgent", {})
 
     diagnosis = models.DiagnosisResult(
         bug_id=bug.id,
+
         severity=triage.get("severity"),
         priority=triage.get("priority"),
         affected_component=triage.get("affected_component"),
         confidence=triage.get("confidence"),
         triage_reasoning=triage.get("reasoning"),
+
         exception_type=log.get("exception_type"),
         failure_point=log.get("failure_point"),
         affected_code_path=", ".join(log.get("affected_code_path", []) or []),
         log_reasoning=log.get("reasoning"),
+
+        root_cause_hypothesis=root_cause.get("root_cause_hypothesis"),
+        root_cause_confidence=root_cause.get("confidence"),
+        root_cause_evidence_json=json.dumps(root_cause.get("supporting_evidence", [])),
+        root_cause_reasoning=root_cause.get("reasoning"),
+
+        duplicate_status=duplicates.get("duplicate_status"),
+        duplicate_matches_json=json.dumps(duplicates.get("matches", [])),
+        duplicate_reasoning=duplicates.get("reasoning"),
+
+        remediation_recommendations_json=json.dumps(remediation.get("recommendations", [])),
+        remediation_confidence=remediation.get("confidence"),
+        remediation_reasoning=remediation.get("reasoning"),
+
         summary=result.get("summary"),
-        agent_outputs_json=json.dumps(result["agent_outputs"]),
+        agent_outputs_json=json.dumps(outputs),
     )
     db.add(diagnosis)
 
-    # Mark the bug as analyzed
     bug.status = "analyzed"
     db.commit()
     db.refresh(diagnosis)
@@ -75,7 +94,6 @@ def health_check():
 
 @app.post("/bugs/paste", response_model=schemas.BugReportOut)
 def submit_pasted_bug(payload: schemas.BugReportCreate, db: Session = Depends(get_db)):
-    """Direct-paste submission. Agents run automatically after storage."""
     if not (payload.description or payload.stack_trace or payload.error_log):
         raise HTTPException(
             status_code=400,
@@ -94,7 +112,6 @@ def submit_pasted_bug(payload: schemas.BugReportCreate, db: Session = Depends(ge
     db.commit()
     db.refresh(bug)
 
-    # Milestone 2: run the agent pipeline on submission
     _run_and_store_diagnosis(bug, db)
     db.refresh(bug)
     return bug
@@ -106,7 +123,6 @@ async def submit_bug_file(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    """File-upload submission. Agents run automatically after storage."""
     ext = "." + file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
@@ -154,7 +170,6 @@ def get_bug(bug_id: int, db: Session = Depends(get_db)):
 
 @app.get("/bugs/{bug_id}/diagnosis", response_model=schemas.DiagnosisOut)
 def get_diagnosis(bug_id: int, db: Session = Depends(get_db)):
-    """Milestone 2: fetch the stored agent diagnosis for a bug."""
     diagnosis = (
         db.query(models.DiagnosisResult)
         .filter(models.DiagnosisResult.bug_id == bug_id)
@@ -168,8 +183,6 @@ def get_diagnosis(bug_id: int, db: Session = Depends(get_db)):
 
 @app.post("/bugs/{bug_id}/diagnose", response_model=schemas.DiagnosisFullOut)
 def rerun_diagnosis(bug_id: int, db: Session = Depends(get_db)):
-    """Milestone 2: manually re-run the agent pipeline on an existing bug.
-    Returns the full pipeline output including raw agent JSON."""
     bug = db.query(models.BugReport).filter(models.BugReport.id == bug_id).first()
     if not bug:
         raise HTTPException(status_code=404, detail="Bug report not found")

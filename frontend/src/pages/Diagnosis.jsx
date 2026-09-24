@@ -1,9 +1,27 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, RotateCcw, ShieldAlert } from "lucide-react";
+import {
+  ArrowLeft,
+  RotateCcw,
+  ShieldAlert,
+  Search,
+  Copy,
+  Wrench,
+} from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../services/api";
 import { formatDate } from "../utils/helpers";
 import { SeverityBadge } from "../components/StatusBadge";
+
+// Parses a JSON-string field from the backend safely, returning a
+// fallback (default: []) if the field is missing or not valid JSON.
+function parseJsonField(value, fallback = []) {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
 
 export default function Diagnosis() {
   const { bugId } = useParams();
@@ -76,6 +94,14 @@ export default function Diagnosis() {
       ? `${Math.round(diagnosis.confidence * 100)}%`
       : "—";
 
+  const rootCauseEvidence = parseJsonField(diagnosis.root_cause_evidence_json);
+  const duplicateMatches = parseJsonField(diagnosis.duplicate_matches_json);
+  const remediationRecs = parseJsonField(diagnosis.remediation_recommendations_json);
+
+  const hasRootCause = Boolean(diagnosis.root_cause_hypothesis);
+  const hasDuplicateInfo = Boolean(diagnosis.duplicate_status);
+  const hasRemediation = remediationRecs.length > 0;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
@@ -107,6 +133,7 @@ export default function Diagnosis() {
         </button>
       </div>
 
+      {/* --- Triage summary cards --- */}
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <InfoCard label="Severity">
           <SeverityBadge severity={diagnosis.severity} />
@@ -127,6 +154,7 @@ export default function Diagnosis() {
         </InfoCard>
       </section>
 
+      {/* --- Overall summary --- */}
       <section className="card rounded-xl">
         <SectionHeader title="Diagnosis Summary" />
         <div className="p-5">
@@ -136,16 +164,10 @@ export default function Diagnosis() {
         </div>
       </section>
 
+      {/* --- Triage + Log Analysis (Milestone 2) --- */}
       <div className="grid gap-5 xl:grid-cols-2">
-        <AnalysisCard
-          title="Triage Analysis"
-          value={diagnosis.triage_reasoning}
-        />
-
-        <AnalysisCard
-          title="Log Analysis"
-          value={diagnosis.log_reasoning}
-        />
+        <AnalysisCard title="Triage Analysis" value={diagnosis.triage_reasoning} />
+        <AnalysisCard title="Log Analysis" value={diagnosis.log_reasoning} />
 
         <section className="card rounded-xl">
           <SectionHeader title="Exception & Failure Point" />
@@ -165,13 +187,174 @@ export default function Diagnosis() {
         </section>
       </div>
 
+      {/* --- Root Cause Agent (Milestone 3 / M3.1) --- */}
+      <section className="card rounded-xl">
+        <SectionHeader
+          title="Root Cause Analysis"
+          icon={<Search size={15} />}
+          badge={
+            hasRootCause ? (
+              <ConfidenceBadge value={diagnosis.root_cause_confidence} />
+            ) : (
+              <InsufficientBadge />
+            )
+          }
+        />
+        <div className="space-y-5 p-5">
+          {hasRootCause ? (
+            <>
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
+                  Hypothesis (agent inference)
+                </p>
+                <p className="text-sm leading-7">{diagnosis.root_cause_hypothesis}</p>
+              </div>
+
+              {diagnosis.root_cause_reasoning && (
+                <div>
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
+                    Reasoning
+                  </p>
+                  <p className="text-sm leading-7 text-[var(--muted)]">
+                    {diagnosis.root_cause_reasoning}
+                  </p>
+                </div>
+              )}
+
+              {rootCauseEvidence.length > 0 && (
+                <div>
+                  <p className="mb-3 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
+                    Supporting Evidence (retrieved from knowledge base)
+                  </p>
+                  <div className="space-y-3">
+                    {rootCauseEvidence.map((ev, i) => (
+                      <EvidenceRow
+                        key={i}
+                        bugId={ev.bug_id}
+                        sourceRepo={ev.source_repo}
+                        distance={ev.similarity_distance}
+                        excerpt={ev.excerpt}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <InsufficientEvidenceMessage text="Insufficient Evidence -- no similar historical defects were retrieved to ground a root cause hypothesis." />
+          )}
+        </div>
+      </section>
+
+      {/* --- Duplicate Detection Agent (Milestone 3 / M3.2) --- */}
+      <section className="card rounded-xl">
+        <SectionHeader
+          title="Duplicate Detection"
+          icon={<Copy size={15} />}
+          badge={
+            hasDuplicateInfo ? (
+              <DuplicateStatusBadge status={diagnosis.duplicate_status} />
+            ) : (
+              <InsufficientBadge />
+            )
+          }
+        />
+        <div className="space-y-4 p-5">
+          {diagnosis.duplicate_reasoning && (
+            <p className="text-sm leading-7 text-[var(--muted)]">
+              {diagnosis.duplicate_reasoning}
+            </p>
+          )}
+
+          {duplicateMatches.length > 0 ? (
+            <div className="space-y-3">
+              {duplicateMatches.map((m, i) => (
+                <div
+                  key={i}
+                  className="rounded-lg border border-[var(--border)] p-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="font-semibold">Bug #{m.bug_id}</span>
+                      {m.source_repo && (
+                        <span className="text-[var(--muted)]">
+                          ({m.source_repo})
+                        </span>
+                      )}
+                      <MatchStatusBadge status={m.match_status} />
+                    </div>
+                    <span className="text-xs text-[var(--muted)]">
+                      similarity {typeof m.similarity_score === "number" ? m.similarity_score.toFixed(2) : "—"}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm text-[var(--muted)]">{m.summary}</p>
+                  {m.explanation && (
+                    <p className="mt-2 text-xs italic text-[var(--muted)]">
+                      {m.explanation}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <InsufficientEvidenceMessage text="No matching historical bugs found -- this appears to be a new, unmatched issue." />
+          )}
+        </div>
+      </section>
+
+      {/* --- Remediation Agent (Milestone 3 / M3.3) --- */}
+      <section className="card rounded-xl">
+        <SectionHeader
+          title="Recommended Fix"
+          icon={<Wrench size={15} />}
+          badge={
+            hasRemediation ? (
+              <ConfidenceBadge value={diagnosis.remediation_confidence} />
+            ) : (
+              <InsufficientBadge />
+            )
+          }
+        />
+        <div className="space-y-4 p-5">
+          {diagnosis.remediation_reasoning && (
+            <p className="text-sm leading-7 text-[var(--muted)]">
+              {diagnosis.remediation_reasoning}
+            </p>
+          )}
+
+          {hasRemediation ? (
+            <div className="space-y-3">
+              {remediationRecs.map((r, i) => (
+                <div key={i} className="rounded-lg border border-[var(--border)] p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <BasisBadge basis={r.basis} />
+                    <span className="text-xs text-[var(--muted)]">
+                      confidence {typeof r.confidence === "number" ? `${Math.round(r.confidence * 100)}%` : "—"}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm leading-7">{r.recommendation}</p>
+                  {r.source_bug_id && (
+                    <p className="mt-1 text-xs text-[var(--muted)]">
+                      Based on historical bug #{r.source_bug_id}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <InsufficientEvidenceMessage text="Insufficient Evidence -- no recommendation could be generated." />
+          )}
+        </div>
+      </section>
+
       <section className="rounded-xl border border-amber-300/50 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-950/20">
         <div className="flex gap-3">
           <ShieldAlert className="mt-0.5 shrink-0 text-[var(--accent)]" size={18} />
           <div>
             <p className="text-sm font-medium">Agent output is diagnostic assistance</p>
             <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-              Review the original bug report and logs alongside the generated analysis before applying a fix.
+              Review the original bug report and logs, and the retrieved historical
+              evidence above, alongside the generated analysis before applying a fix.
             </p>
           </div>
         </div>
@@ -191,10 +374,14 @@ function InfoCard({ label, children }) {
   );
 }
 
-function SectionHeader({ title }) {
+function SectionHeader({ title, icon, badge }) {
   return (
-    <div className="border-b border-[var(--border)] px-5 py-4">
-      <h2 className="text-sm font-semibold">{title}</h2>
+    <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
+      <h2 className="flex items-center gap-2 text-sm font-semibold">
+        {icon}
+        {title}
+      </h2>
+      {badge}
     </div>
   );
 }
@@ -226,5 +413,106 @@ function Message({ children }) {
     <div className="card rounded-xl p-12 text-center text-sm text-[var(--muted)]">
       {children}
     </div>
+  );
+}
+
+function InsufficientEvidenceMessage({ text }) {
+  return (
+    <p className="rounded-lg border border-dashed border-[var(--border)] p-4 text-sm text-[var(--muted)]">
+      {text}
+    </p>
+  );
+}
+
+function EvidenceRow({ bugId, sourceRepo, distance, excerpt }) {
+  return (
+    <div className="rounded-lg border border-[var(--border)] p-3">
+      <div className="flex items-center justify-between text-xs">
+        <span className="font-semibold">
+          Bug #{bugId} {sourceRepo ? `(${sourceRepo})` : ""}
+        </span>
+        <span className="text-[var(--muted)]">distance {distance}</span>
+      </div>
+      <p className="mt-1.5 text-xs text-[var(--muted)]">{excerpt}</p>
+    </div>
+  );
+}
+
+function ConfidenceBadge({ value }) {
+  const pct = typeof value === "number" ? Math.round(value * 100) : null;
+  const color =
+    pct === null
+      ? "bg-gray-100 text-gray-600"
+      : pct >= 70
+      ? "bg-emerald-100 text-emerald-700"
+      : pct >= 45
+      ? "bg-amber-100 text-amber-700"
+      : "bg-rose-100 text-rose-700";
+
+  return (
+    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${color}`}>
+      {pct === null ? "—" : `${pct}% confidence`}
+    </span>
+  );
+}
+
+function InsufficientBadge() {
+  return (
+    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
+      Insufficient Evidence
+    </span>
+  );
+}
+
+function DuplicateStatusBadge({ status }) {
+  const color =
+    status === "Likely Duplicate"
+      ? "bg-rose-100 text-rose-700"
+      : status === "Related Issue"
+      ? "bg-amber-100 text-amber-700"
+      : "bg-emerald-100 text-emerald-700";
+
+  return (
+    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${color}`}>
+      {status}
+    </span>
+  );
+}
+
+function MatchStatusBadge({ status }) {
+  const color =
+    status === "Likely Duplicate"
+      ? "bg-rose-50 text-rose-600"
+      : status === "Related Issue"
+      ? "bg-amber-50 text-amber-600"
+      : "bg-emerald-50 text-emerald-600";
+
+  return (
+    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${color}`}>
+      {status}
+    </span>
+  );
+}
+
+function BasisBadge({ basis }) {
+  const labels = {
+    historical_evidence: "Historical Evidence",
+    root_cause_analysis: "Root Cause Analysis",
+    best_practice_guideline: "Best Practice Guideline",
+  };
+  const colors = {
+    historical_evidence: "bg-emerald-100 text-emerald-700",
+    root_cause_analysis: "bg-blue-100 text-blue-700",
+    best_practice_guideline: "bg-gray-100 text-gray-600",
+  };
+
+  return (
+    <span
+      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+        colors[basis] || "bg-gray-100 text-gray-600"
+      }`}
+    >
+      {labels[basis] || basis}
+    </span>
   );
 }
