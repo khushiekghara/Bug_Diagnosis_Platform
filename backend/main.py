@@ -6,6 +6,7 @@ from typing import Optional, List
 
 import models
 import schemas
+import analytics
 from database import engine, get_db
 from agents.orchestrator import AgentOrchestrator
 
@@ -37,8 +38,6 @@ def _bug_to_dict(bug: models.BugReport) -> dict:
 
 
 def _run_and_store_diagnosis(bug: models.BugReport, db: Session) -> dict:
-    """Runs the full agent pipeline (Milestone 2 + Milestone 3) on a bug
-    and persists every agent's result."""
     result = orchestrator.run(_bug_to_dict(bug))
     outputs = result["agent_outputs"]
 
@@ -189,3 +188,15 @@ def rerun_diagnosis(bug_id: int, db: Session = Depends(get_db)):
 
     result = _run_and_store_diagnosis(bug, db)
     return result
+
+
+@app.get("/analytics/patterns")
+def get_defect_pattern_analytics(db: Session = Depends(get_db)):
+    """
+    Milestone 4 -- Task 1: Defect Pattern Analytics Module.
+    Returns component frequency, severity distribution, recurring
+    exception types, systemic (component, exception) patterns, recurring
+    keyword themes, and a duplicate-cluster summary across every bug
+    submitted so far.
+    """
+    return analytics.get_full_analytics_report(db)

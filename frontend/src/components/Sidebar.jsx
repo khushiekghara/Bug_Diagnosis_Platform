@@ -1,10 +1,19 @@
-import { Bug, FilePlus2, LayoutDashboard, ListChecks, X } from "lucide-react";
+import {
+  BarChart3,
+  Bug,
+  FilePlus2,
+  LayoutDashboard,
+  ListChecks,
+  X,
+} from "lucide-react";
+
 import { NavLink } from "react-router-dom";
 
 const items = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/submit", label: "Submit Bug", icon: FilePlus2 },
   { to: "/bugs", label: "Bug Reports", icon: ListChecks },
+  { to: "/analytics", label: "Pattern Analytics", icon: BarChart3 },
 ];
 
 export default function Sidebar({ open, onClose }) {

@@ -6,6 +6,7 @@ import SubmitBug from "./pages/SubmitBug";
 import BugReports from "./pages/BugReports";
 import Diagnosis from "./pages/Diagnosis";
 import BugDetails from "./pages/BugDetails";
+import Analytics from "./pages/Analytics";
 
 export default function App() {
   const [refreshKey, setRefreshKey] = useState(0);
@@ -30,6 +31,10 @@ export default function App() {
         />
         <Route path="/bugs/:bugId" element={<BugDetails />} />
         <Route path="/diagnosis/:bugId" element={<Diagnosis />} />
+        <Route
+          path="/analytics"
+          element={<Analytics refreshKey={refreshKey} />}
+        />
       </Route>
     </Routes>
   );

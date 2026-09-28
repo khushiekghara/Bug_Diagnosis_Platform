@@ -46,4 +46,19 @@ export const api = {
     request(`/bugs/${bugId}/diagnose`, {
       method: "POST",
     }),
+
+  // Milestone 4: Defect Pattern Analytics
+  getAnalytics: () => request("/analytics/patterns"),
+
+  // Milestone 4: Knowledge base growth -- mark a bug resolved with a
+  // confirmed fix so it is added back to the knowledge base.
+  resolveBug: (bugId, resolution) =>
+    request(`/bugs/${bugId}/resolve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resolution }),
+    }),
+
+  // Milestone 4: knowledge base size / growth stats
+  getKnowledgeBaseStats: () => request("/knowledge-base/stats"),
 };
