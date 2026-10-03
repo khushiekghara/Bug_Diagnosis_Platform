@@ -22,8 +22,36 @@ class BugReportOut(BaseModel):
     status: str
     created_at: datetime
 
+    # Milestone 4: set once a confirmed fix has been recorded
+    resolution_text: Optional[str] = None
+    resolved_at: Optional[datetime] = None
+    kb_chunks_added: Optional[int] = None
+
     class Config:
         from_attributes = True
+
+
+class ResolveBugRequest(BaseModel):
+    """Milestone 4: a confirmed fix for a bug."""
+    resolution: str = Field(..., min_length=10, max_length=4000)
+
+
+class ResolveBugOut(BaseModel):
+    """Milestone 4: result of adding a resolved bug to the knowledge base."""
+    bug_id: int
+    resolved_at: datetime
+    kb_chunks_added: int
+    knowledge_base: Dict[str, int]
+    message: str
+
+
+class KnowledgeBaseStatsOut(BaseModel):
+    """Milestone 4: size of the knowledge base and how much it has grown."""
+    total_chunks: int
+    historical_chunks: int
+    platform_chunks: int
+    platform_bugs: int
+    resolved_bugs_submitted: int
 
 
 class DiagnosisOut(BaseModel):

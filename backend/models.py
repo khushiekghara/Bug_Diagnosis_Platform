@@ -20,6 +20,11 @@ class BugReport(Base):
     status = Column(String(30), nullable=False, default="submitted")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+    # --- Milestone 4: confirmed fix / knowledge base growth ---
+    resolution_text = Column(Text, nullable=True)          # the confirmed fix
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+    kb_chunks_added = Column(Integer, nullable=True)       # chunks written to the knowledge base
+
 
 class DiagnosisResult(Base):
     """

@@ -3,22 +3,13 @@ Milestone 3 -- Task 1: Root Cause Agent
 Reasons about the probable root cause of a submitted bug using RAG
 retrieval over the Historical Defect Knowledge Base built in Milestone 1.
 
-Design:
-- Retrieves the most semantically similar historical bug chunks for the
-  submitted bug's text (title + description + stack trace + error log),
-  narrowed with the exception type / affected component already
-  identified by the Triage Agent and Log Analysis Agent (so it consumes
-  their outputs, as required by M3.1).
-- Builds a root cause hypothesis grounded in what those historical bugs
-  describe, rather than inventing an explanation.
-- Clearly separates "evidence" (what was retrieved from the knowledge
-  base) from "reasoning" (the agent's own inference connecting that
-  evidence to the current bug) via distinct output fields.
-- No external LLM/API required -- retrieval + rule-based synthesis.
+Milestone 4 update: excludes the bug's own knowledge base record (its
+confirmed-fix entry, if it was resolved) so a bug is never used as
+evidence for itself when re-analyzed.
 """
 from typing import Dict
 
-from agents.retriever import get_retriever
+from agents.retriever import get_retriever, platform_bug_id
 
 DISTANCE_HIGH_CONFIDENCE = 0.6
 DISTANCE_MEDIUM_CONFIDENCE = 1.0
@@ -72,8 +63,15 @@ class RootCauseAgent:
                 "reasoning": "No bug text, stack trace, or error log was available to retrieve context from.",
             }
 
+        # A bug that was already resolved and added to the knowledge base
+        # must not be used as evidence for itself when it is re-analyzed.
+        bug_id = shared_context.get("bug_report", {}).get("id")
+        exclude = {platform_bug_id(bug_id)} if bug_id is not None else set()
+
         retriever = get_retriever()
-        matches = retriever.query_unique_bugs(query_text, top_k=top_k, max_bugs=max_evidence)
+        matches = retriever.query_unique_bugs(
+            query_text, top_k=top_k, max_bugs=max_evidence, exclude_bug_ids=exclude
+        )
 
         if not matches:
             return {

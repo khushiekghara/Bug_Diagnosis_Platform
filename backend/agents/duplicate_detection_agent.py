@@ -7,10 +7,15 @@ issue, or a new/unmatched issue.
 Reuses the same embedding model and vector store as the Root Cause Agent
 (via agents/retriever.py) -- same embedding strategy across the whole RAG
 pipeline, as required by M3.2.
+
+Milestone 4 update: excludes the bug's own knowledge base record so it is
+never reported as a duplicate of itself, and flags matches that were
+resolved on this platform (confirmed_on_platform) so the Remediation
+Agent can trust their resolution text.
 """
 from typing import Dict
 
-from agents.retriever import get_retriever
+from agents.retriever import get_retriever, platform_bug_id, PLATFORM_ORIGIN
 
 DUPLICATE_THRESHOLD = 0.6   # distance below this -> likely duplicate
 RELATED_THRESHOLD = 1.0     # distance below this (but above duplicate) -> related
@@ -52,8 +57,13 @@ class DuplicateDetectionAgent:
                 "reasoning": "No bug text was available to search against the knowledge base.",
             }
 
+        bug_id = bug.get("id")
+        exclude = {platform_bug_id(bug_id)} if bug_id is not None else set()
+
         retriever = get_retriever()
-        matches = retriever.query_unique_bugs(query_text, top_k=top_k, max_bugs=max_matches)
+        matches = retriever.query_unique_bugs(
+            query_text, top_k=top_k, max_bugs=max_matches, exclude_bug_ids=exclude
+        )
 
         if not matches:
             return {
@@ -70,6 +80,17 @@ class DuplicateDetectionAgent:
         for m in matches:
             similarity_score = _distance_to_similarity_score(m["distance"])
             match_status = _classify_status(m["distance"])
+            confirmed_on_platform = m.get("origin") == PLATFORM_ORIGIN
+            explanation = (
+                f"This historical bug was retrieved because its description is semantically "
+                f"similar to the submitted bug (similarity score {similarity_score}), based on "
+                f"shared error patterns and/or affected component."
+            )
+            if confirmed_on_platform:
+                explanation += (
+                    " It was resolved on this platform and its confirmed fix was added "
+                    "back to the knowledge base."
+                )
             structured_matches.append({
                 "bug_id": m["bug_id"],
                 "source_repo": m.get("source_repo"),
@@ -79,11 +100,9 @@ class DuplicateDetectionAgent:
                 "distance": round(m["distance"], 4),
                 "match_status": match_status,
                 "summary": _snippet(m["text"]),
-                "explanation": (
-                    f"This historical bug was retrieved because its description is semantically "
-                    f"similar to the submitted bug (similarity score {similarity_score}), based on "
-                    f"shared error patterns and/or affected component."
-                ),
+                "resolution": m.get("resolution"),
+                "confirmed_on_platform": confirmed_on_platform,
+                "explanation": explanation,
             })
 
         reasoning = (

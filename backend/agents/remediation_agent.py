@@ -4,16 +4,12 @@ Generates specific, actionable fix recommendations for a submitted bug,
 grounded in the Root Cause Agent's hypothesis, the Duplicate Detection
 Agent's matched historical bugs, and the Triage/Log Analysis findings.
 
-Design:
-- Prefers historical evidence: if a matched historical bug's text
-  contains resolution-style language (e.g. "fixed by", "resolved",
-  "patched", "workaround"), that snippet is surfaced as grounded evidence.
-- Falls back to general best-practice guidance (clearly labeled as such,
-  not presented as a confirmed fix) when no resolution text is found.
-- Never presents a speculative recommendation as a confirmed fix -- each
-  recommendation carries a "basis" label (historical_evidence,
-  root_cause_analysis, or best_practice_guideline) and its own
-  confidence score, so the distinction is explicit in the output.
+Milestone 4 update: when the Duplicate Detection Agent surfaces a match
+that was resolved on this platform (confirmed_on_platform), its exact
+confirmed fix is used as the top-ranked, highest-confidence
+recommendation -- stronger evidence than text-mined "resolution
+language", and clearly labeled as its own basis ("confirmed_fix") so it
+is never confused with a speculative guess.
 """
 import re
 from typing import Dict, Optional
@@ -61,8 +57,28 @@ class RemediationAgent:
 
         recommendations = []
 
+        # --- Highest-quality evidence: a CONFIRMED fix from a bug
+        # resolved on this platform (Milestone 4 growth mechanism). Only
+        # used when the match is genuinely close -- a confirmed fix for
+        # an unrelated bug would be misleading. ---
+        confirmed_found = False
         evidence_found = False
         for match in matches[:3]:
+            confirmed_fix = (match.get("resolution") or "").strip()
+            close_enough = match.get("match_status") in ("Likely Duplicate", "Related Issue")
+            if confirmed_fix and close_enough:
+                confirmed_found = True
+                recommendations.append({
+                    "recommendation": (
+                        f"A similar bug (bug_id={match['bug_id']}) was resolved with this "
+                        f"confirmed fix: \"{confirmed_fix[:400]}\""
+                    ),
+                    "basis": "confirmed_fix",
+                    "source_bug_id": match["bug_id"],
+                    "confidence": round(min(match.get("similarity_score", 0.5) + 0.15, 0.95), 2),
+                })
+                continue
+
             snippet = _extract_resolution_snippet(match.get("summary", ""))
             if snippet:
                 evidence_found = True
@@ -97,19 +113,25 @@ class RemediationAgent:
         overall_confidence = max((r["confidence"] for r in recommendations), default=0.3)
 
         reasoning_parts = []
+        if confirmed_found:
+            reasoning_parts.append(
+                "One or more closely matched bugs were previously resolved on this platform with a "
+                "confirmed fix; those are ranked first because they are the strongest evidence available."
+            )
         if evidence_found:
             reasoning_parts.append(
                 "Found resolution-style language in one or more matched historical bugs; "
                 "the top evidence-based recommendation is grounded in that historical fix."
             )
-        else:
+        elif not confirmed_found:
             reasoning_parts.append(
                 "No explicit resolution language was found in the matched historical bugs; "
                 "recommendations rely on root cause analysis and general best practices instead."
             )
         reasoning_parts.append(
-            "Recommendations are labeled by basis (historical_evidence, root_cause_analysis, or "
-            "best_practice_guideline) so speculative guidance is never presented as a confirmed fix."
+            "Recommendations are labeled by basis (confirmed_fix, historical_evidence, "
+            "root_cause_analysis, or best_practice_guideline) so speculative guidance is never "
+            "presented as a confirmed fix."
         )
 
         return {
@@ -134,6 +156,8 @@ if __name__ == "__main__":
                 {
                     "bug_id": "236",
                     "similarity_score": 0.62,
+                    "match_status": "Likely Duplicate",
+                    "resolution": "Added a null-check before frame destruction in nsFrame.cpp.",
                     "summary": "Crash on tab close. Fixed by adding a null-check before frame destruction in nsFrame.cpp.",
                 }
             ]
